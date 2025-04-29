@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +18,10 @@ type VideoInfo struct {
 	Thumbnail string `json:"thumbnail"` // Base64 encoded thumbnail
 }
 
+type PageData struct {
+	Videos []VideoInfo
+}
+
 func ListVideosHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -31,8 +35,26 @@ func ListVideosHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(videos)
+	// Parse templates
+	tmpl, err := template.ParseFiles("templates/base.html", "templates/videos.html")
+	if err != nil {
+		log.Printf("Error parsing templates: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Prepare data for template
+	data := PageData{
+		Videos: videos,
+	}
+
+	// Execute template
+	w.Header().Set("Content-Type", "text/html")
+	if err := tmpl.Execute(w, data); err != nil {
+		log.Printf("Error executing template: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func getVideosList() ([]VideoInfo, error) {

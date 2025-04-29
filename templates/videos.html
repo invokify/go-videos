@@ -1,0 +1,113 @@
+{{define "content"}}
+<style>
+    .video-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 2rem;
+        padding: 1rem;
+    }
+
+    .video-card {
+        background: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease-in-out;
+        position: relative;
+        min-height: 200px;
+    }
+
+    .video-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .video-thumbnail {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        background-color: #eee;
+        cursor: pointer;
+    }
+
+    .video-player {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 200px;
+        display: none;
+        background: #000;
+    }
+
+    .video-card:hover .video-player {
+        display: block;
+    }
+
+    .video-card:hover .video-thumbnail {
+        display: none;
+    }
+
+    .video-info {
+        padding: 1rem;
+    }
+
+    .video-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #2c3e50;
+    }
+
+    .video-duration {
+        font-size: 0.9rem;
+        color: #666;
+    }
+
+    .no-videos {
+        text-align: center;
+        padding: 2rem;
+        color: #666;
+    }
+</style>
+
+<div class="video-grid">
+    {{if .Videos}}
+    {{range .Videos}}
+    <div class="video-card">
+        <img src="{{.Thumbnail}}" alt="{{.Title}}" class="video-thumbnail">
+        <video class="video-player" muted loop>
+            <source src="/stream/{{.Title}}.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div class="video-info">
+            <h3 class="video-title">{{.Title}}</h3>
+            <p class="video-duration">{{.Duration}}</p>
+        </div>
+    </div>
+    {{end}}
+    {{else}}
+    <div class="no-videos">
+        <p>No videos found</p>
+    </div>
+    {{end}}
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const videoCards = document.querySelectorAll('.video-card');
+
+        videoCards.forEach(card => {
+            const video = card.querySelector('video');
+
+            card.addEventListener('mouseenter', () => {
+                video.play();
+            });
+
+            card.addEventListener('mouseleave', () => {
+                video.pause();
+                video.currentTime = 0;
+            });
+        });
+    });
+</script>
+{{end}}
