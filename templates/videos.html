@@ -47,6 +47,49 @@
         display: none;
     }
 
+    .play-pause-btn {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 60px;
+        height: 60px;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 2;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+    }
+
+    .video-card:hover .play-pause-btn {
+        opacity: 1;
+    }
+
+    .play-pause-btn:hover {
+        background: rgba(0, 0, 0, 0.9);
+    }
+
+    .play-pause-icon {
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 15px 0 15px 25px;
+        border-color: transparent transparent transparent #ffffff;
+        margin-left: 5px;
+    }
+
+    .play-pause-icon.pause {
+        width: 20px;
+        height: 30px;
+        border: none;
+        background: #ffffff;
+        clip-path: polygon(0 0, 8px 0, 8px 30px, 0 30px, 0 0, 20px 0, 20px 30px, 12px 30px, 12px 0, 20px 0);
+    }
+
     .video-info {
         padding: 1rem;
     }
@@ -79,6 +122,9 @@
             <source src="/stream/{{.Title}}.mp4" type="video/mp4">
             Your browser does not support the video tag.
         </video>
+        <div class="play-pause-btn">
+            <div class="play-pause-icon"></div>
+        </div>
         <div class="video-info">
             <h3 class="video-title">{{.Title}}</h3>
             <p class="video-duration">{{.Duration}}</p>
@@ -98,14 +144,29 @@
 
         videoCards.forEach(card => {
             const video = card.querySelector('video');
+            const playPauseBtn = card.querySelector('.play-pause-btn');
+            const playPauseIcon = card.querySelector('.play-pause-icon');
 
             card.addEventListener('mouseenter', () => {
                 video.play();
+                playPauseIcon.classList.add('pause');
             });
 
             card.addEventListener('mouseleave', () => {
                 video.pause();
                 video.currentTime = 0;
+                playPauseIcon.classList.remove('pause');
+            });
+
+            playPauseBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (video.paused) {
+                    video.play();
+                    playPauseIcon.classList.add('pause');
+                } else {
+                    video.pause();
+                    playPauseIcon.classList.remove('pause');
+                }
             });
         });
     });
