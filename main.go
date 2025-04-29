@@ -12,6 +12,7 @@ func main() {
 
 	// Register routes
 	mux.HandleFunc("/stream/", handlers.StreamHandler)
+	mux.HandleFunc("/videos", handlers.ListVideosHandler)
 
 	// Start the server
 	log.Printf("Starting server on :8080")
