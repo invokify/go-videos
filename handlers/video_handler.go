@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func StreamHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +38,29 @@ func StreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fileSize := fileInfo.Size()
+	lastModified := fileInfo.ModTime()
+
+	// Set cache control headers
+	w.Header().Set("Cache-Control", "public, max-age=3600") // Cache for 1 hour
+	w.Header().Set("ETag", fmt.Sprintf(`"%x-%x"`, lastModified.Unix(), fileSize))
+	w.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
+
+	// Check if the client's cached version is still valid
+	if ifNoneMatch := r.Header.Get("If-None-Match"); ifNoneMatch != "" {
+		if ifNoneMatch == fmt.Sprintf(`"%x-%x"`, lastModified.Unix(), fileSize) {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+
+	if ifModifiedSince := r.Header.Get("If-Modified-Since"); ifModifiedSince != "" {
+		if t, err := time.Parse(http.TimeFormat, ifModifiedSince); err == nil {
+			if lastModified.Before(t.Add(1 * time.Second)) {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+	}
 
 	// Get the range header
 	rangeHeader := r.Header.Get("Range")
