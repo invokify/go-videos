@@ -10,6 +10,8 @@ A modern video gallery application built with Go, featuring a responsive grid la
 - Video streaming with support for various video formats
 - Automatic video metadata extraction (duration, title)
 - Modern and clean user interface
+- HTTP caching support for improved video playback performance
+- Range request support for efficient video streaming
 
 ## Prerequisites
 
@@ -56,7 +58,10 @@ http://localhost:8080/videos
 ## API Endpoints
 
 - `GET /videos` - Displays the video gallery interface
-- `GET /stream/{filename}` - Streams a video file
+- `GET /stream/{filename}` - Streams a video file with support for:
+  - HTTP caching (1-hour cache duration)
+  - Range requests for partial content
+  - ETag and Last-Modified validation
 
 ## Project Structure
 
