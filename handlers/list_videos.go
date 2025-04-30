@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -149,10 +150,13 @@ func extractVideoMetadata(videoPath string) (VideoInfo, error) {
 		}
 	}
 
-	// For now, we'll use a placeholder thumbnail
-	// In a real implementation, you might want to use a different approach
-	// like generating thumbnails on upload and storing them separately
-	thumbnail := "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
+	// Generate thumbnail using FFmpeg
+	thumbnail, err := generateThumbnail(videoPath)
+	if err != nil {
+		log.Printf("Error generating thumbnail: %v", err)
+		// Use a default thumbnail if generation fails
+		thumbnail = "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
+	}
 
 	return VideoInfo{
 		Title:     title,
@@ -165,6 +169,34 @@ func getMP4Duration(file *os.File) (time.Duration, error) {
 	// For now, return a default duration
 	// In a real implementation, you would use a proper MP4 parser
 	return 0, nil
+}
+
+func generateThumbnail(videoPath string) (string, error) {
+	// Get video filename without extension for the thumbnail name
+	base := filepath.Base(videoPath)
+	ext := filepath.Ext(videoPath)
+	videoName := base[:len(base)-len(ext)]
+
+	// Ensure thumbnails directory exists
+	thumbnailDir := "thumbnails"
+	if err := os.MkdirAll(thumbnailDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create thumbnails directory: %v", err)
+	}
+
+	// Create path for the thumbnail
+	thumbnailPath := filepath.Join(thumbnailDir, videoName+".jpg")
+
+	// Check if thumbnail already exists
+	if _, err := os.Stat(thumbnailPath); os.IsNotExist(err) {
+		// Run FFmpeg to extract a frame at 1 second
+		cmd := exec.Command("ffmpeg", "-i", videoPath, "-ss", "00:00:01", "-vframes", "1", "-q:v", "2", thumbnailPath)
+		if err := cmd.Run(); err != nil {
+			return "", fmt.Errorf("failed to generate thumbnail: %v", err)
+		}
+	}
+
+	// Return the URL path to the thumbnail
+	return "/thumbnails/" + videoName + ".jpg", nil
 }
 
 func formatDuration(d time.Duration) string {
