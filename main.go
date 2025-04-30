@@ -13,6 +13,7 @@ func main() {
 	// Register routes
 	mux.HandleFunc("/stream/", handlers.StreamHandler)
 	mux.HandleFunc("/videos", handlers.ListVideosHandler)
+	mux.HandleFunc("/upload", handlers.UploadHandler)
 
 	// Serve static files from the thumbnails directory
 	mux.Handle("/thumbnails/", http.StripPrefix("/thumbnails/", http.FileServer(http.Dir("thumbnails"))))

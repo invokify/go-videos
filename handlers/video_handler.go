@@ -119,3 +119,59 @@ func StreamHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+func UploadHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse the multipart form with a 10MB max memory limit
+	// 10 << 20 is a bitwise shift operation that equals 10 * 2^20 = 10,485,760 bytes (10MB)
+	// This sets the maximum amount of memory used to store file parts before they're written to disk
+	err := r.ParseMultipartForm(10 << 20)
+	if err != nil {
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+
+	// Get the file from the form
+	file, header, err := r.FormFile("video")
+	if err != nil {
+		http.Error(w, "Error retrieving file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Check if the file is a video
+	contentType := header.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "video/") {
+		http.Error(w, "File must be a video", http.StatusBadRequest)
+		return
+	}
+
+	// Create videos directory if it doesn't exist
+	if err := os.MkdirAll("videos", 0755); err != nil {
+		http.Error(w, "Failed to create videos directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Create the file in the videos directory
+	filename := header.Filename
+	filepath := filepath.Join("videos", filename)
+	dst, err := os.Create(filepath)
+	if err != nil {
+		http.Error(w, "Failed to create file", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	// Copy the uploaded file to the destination file
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	// Redirect back to the videos page
+	http.Redirect(w, r, "/videos", http.StatusSeeOther)
+}

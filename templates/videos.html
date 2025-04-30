@@ -185,7 +185,91 @@
         padding: 2rem;
         color: #666;
     }
+
+    .upload-section {
+        padding: 2rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin: 1rem;
+        text-align: center;
+        border: 2px dashed #dee2e6;
+        transition: all 0.3s ease;
+    }
+
+    .upload-section.drag-over {
+        background: #e9ecef;
+        border-color: #007bff;
+    }
+
+    .upload-form {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+    .upload-icon {
+        font-size: 2rem;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+
+    .upload-text {
+        color: #6c757d;
+        margin-bottom: 1rem;
+    }
+
+    .upload-btn {
+        background: #007bff;
+        color: white;
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: background-color 0.2s;
+    }
+
+    .upload-btn:hover {
+        background: #0056b3;
+    }
+
+    .file-input {
+        display: none;
+    }
+
+    .file-input-label {
+        background: #e9ecef;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .file-input-label:hover {
+        background: #dee2e6;
+    }
+
+    .selected-file {
+        margin-top: 0.5rem;
+        color: #666;
+    }
 </style>
+
+<div class="upload-section" id="drop-zone">
+    <form class="upload-form" action="/upload" method="post" enctype="multipart/form-data">
+        <div class="upload-icon">📁</div>
+        <div class="upload-text">Drag and drop your video here, or</div>
+        <label for="video-upload" class="file-input-label">
+            Choose Video File
+            <input type="file" id="video-upload" name="video" class="file-input" accept="video/*" required>
+        </label>
+        <div class="selected-file" id="selected-file-name">No file selected</div>
+        <button type="submit" class="upload-btn">Upload Video</button>
+    </form>
+</div>
 
 <div class="video-grid">
     {{if .Videos}}
@@ -228,6 +312,61 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        // File input handling
+        const fileInput = document.getElementById('video-upload');
+        const selectedFileName = document.getElementById('selected-file-name');
+        const dropZone = document.getElementById('drop-zone');
+        const uploadForm = document.querySelector('.upload-form');
+
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        // Highlight drop zone when item is dragged over it
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        // Handle dropped files
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function highlight(e) {
+            dropZone.classList.add('drag-over');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files.length > 0) {
+                fileInput.files = files;
+                selectedFileName.textContent = files[0].name;
+            }
+        }
+
+        fileInput.addEventListener('change', function () {
+            if (this.files && this.files[0]) {
+                selectedFileName.textContent = this.files[0].name;
+            } else {
+                selectedFileName.textContent = 'No file selected';
+            }
+        });
+
         const videoCards = document.querySelectorAll('.video-card');
 
         videoCards.forEach(card => {
