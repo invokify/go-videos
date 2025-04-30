@@ -90,6 +90,63 @@
         clip-path: polygon(0 0, 8px 0, 8px 30px, 0 30px, 0 0, 20px 0, 20px 30px, 12px 30px, 12px 0, 20px 0);
     }
 
+    .video-controls {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 10px;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+    }
+
+    .video-card:hover .video-controls {
+        opacity: 1;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+        cursor: pointer;
+        position: relative;
+    }
+
+    .progress {
+        height: 100%;
+        background: #ff0000;
+        border-radius: 2px;
+        width: 0;
+        transition: width 0.1s linear;
+    }
+
+    .progress-handle {
+        width: 12px;
+        height: 12px;
+        background: #ff0000;
+        border-radius: 50%;
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        left: 0;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+    }
+
+    .progress-bar:hover .progress-handle {
+        opacity: 1;
+    }
+
+    .time-display {
+        color: white;
+        font-size: 12px;
+        margin-top: 5px;
+        display: flex;
+        justify-content: space-between;
+    }
+
     .video-info {
         padding: 1rem;
     }
@@ -125,6 +182,16 @@
         <div class="play-pause-btn">
             <div class="play-pause-icon"></div>
         </div>
+        <div class="video-controls">
+            <div class="progress-bar">
+                <div class="progress"></div>
+                <div class="progress-handle"></div>
+            </div>
+            <div class="time-display">
+                <span class="current-time">0:00</span>
+                <span class="total-time">{{.Duration}}</span>
+            </div>
+        </div>
         <div class="video-info">
             <h3 class="video-title">{{.Title}}</h3>
             <p class="video-duration">{{.Duration}}</p>
@@ -146,7 +213,35 @@
             const video = card.querySelector('video');
             const playPauseBtn = card.querySelector('.play-pause-btn');
             const playPauseIcon = card.querySelector('.play-pause-icon');
+            const progressBar = card.querySelector('.progress-bar');
+            const progress = card.querySelector('.progress');
+            const progressHandle = card.querySelector('.progress-handle');
+            const currentTimeDisplay = card.querySelector('.current-time');
+            const totalTimeDisplay = card.querySelector('.total-time');
 
+            // Format time in MM:SS
+            function formatTime(seconds) {
+                const minutes = Math.floor(seconds / 60);
+                seconds = Math.floor(seconds % 60);
+                return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            // Update progress bar
+            function updateProgress() {
+                const percent = (video.currentTime / video.duration) * 100;
+                progress.style.width = `${percent}%`;
+                progressHandle.style.left = `${percent}%`;
+                currentTimeDisplay.textContent = formatTime(video.currentTime);
+            }
+
+            // Handle seeking
+            function seek(e) {
+                const rect = progressBar.getBoundingClientRect();
+                const pos = (e.clientX - rect.left) / rect.width;
+                video.currentTime = pos * video.duration;
+            }
+
+            // Event listeners
             card.addEventListener('mouseenter', () => {
                 video.play();
                 playPauseIcon.classList.add('pause');
@@ -156,6 +251,7 @@
                 video.pause();
                 video.currentTime = 0;
                 playPauseIcon.classList.remove('pause');
+                updateProgress();
             });
 
             playPauseBtn.addEventListener('click', (e) => {
@@ -166,6 +262,14 @@
                 } else {
                     video.pause();
                     playPauseIcon.classList.remove('pause');
+                }
+            });
+
+            video.addEventListener('timeupdate', updateProgress);
+            progressBar.addEventListener('click', seek);
+            progressBar.addEventListener('mousemove', (e) => {
+                if (e.buttons === 1) { // Left mouse button
+                    seek(e);
                 }
             });
         });
