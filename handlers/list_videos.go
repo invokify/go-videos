@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/h2non/filetype"
@@ -141,13 +143,10 @@ func extractVideoMetadata(videoPath string) (VideoInfo, error) {
 	ext := filepath.Ext(videoPath)
 	title := base[:len(base)-len(ext)]
 
-	// For MP4 files, try to get duration
-	var duration time.Duration
-	if ext == ".mp4" {
-		duration, err = getMP4Duration(file)
-		if err != nil {
-			log.Printf("Error getting MP4 duration: %v", err)
-		}
+	// Get duration for all video types
+	duration, err := getMP4Duration(file)
+	if err != nil {
+		log.Printf("Error getting video duration: %v", err)
 	}
 
 	// Generate thumbnail using FFmpeg
@@ -155,7 +154,7 @@ func extractVideoMetadata(videoPath string) (VideoInfo, error) {
 	if err != nil {
 		log.Printf("Error generating thumbnail: %v", err)
 		// Use a default thumbnail if generation fails
-		thumbnail = "data:image/jpeg;base64,/9j/4AAQSkZJRg..."
+		thumbnail = "/thumbnails/default.jpg"
 	}
 
 	return VideoInfo{
@@ -166,9 +165,24 @@ func extractVideoMetadata(videoPath string) (VideoInfo, error) {
 }
 
 func getMP4Duration(file *os.File) (time.Duration, error) {
-	// For now, return a default duration
-	// In a real implementation, you would use a proper MP4 parser
-	return 0, nil
+	// Get the file path
+	filePath := file.Name()
+
+	// Run FFprobe to get duration
+	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filePath)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get duration: %v", err)
+	}
+
+	// Parse the duration (FFprobe outputs seconds as a float)
+	duration, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse duration: %v", err)
+	}
+
+	// Convert to time.Duration
+	return time.Duration(duration * float64(time.Second)), nil
 }
 
 func generateThumbnail(videoPath string) (string, error) {
