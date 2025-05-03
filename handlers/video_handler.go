@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"go-video/transcoder"
+
+	"html/template"
+
 	"golang.org/x/time/rate"
 )
 
@@ -27,21 +31,44 @@ func StreamHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract the video filename from the URL
-	filename := strings.TrimPrefix(r.URL.Path, "/stream/")
-	if filename == "" {
+	// Extract the video filename and quality from the URL
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/stream/"), "/")
+	if len(pathParts) < 1 {
 		http.Error(w, "File not specified", http.StatusBadRequest)
 		return
 	}
 
+	filename := pathParts[0]
+	quality := "original"
+	if len(pathParts) > 1 {
+		quality = pathParts[1]
+	}
+
 	// Construct the path to the video file
-	path := filepath.Join("videos", filename)
+	var path string
+	if quality == "original" {
+		path = filepath.Join("videos", filename)
+	} else {
+		// For transcoded versions, the filename format is: original_name_quality.mp4
+		baseName := strings.TrimSuffix(filename, filepath.Ext(filename))
+		path = filepath.Join("videos", fmt.Sprintf("%s_%s.mp4", baseName, quality))
+	}
 
 	// Open the video file
 	video, err := os.Open(path)
 	if err != nil {
-		http.Error(w, "File not found", http.StatusNotFound)
-		return
+		// If the requested quality is not available, try the original
+		if quality != "original" {
+			path = filepath.Join("videos", filename)
+			video, err = os.Open(path)
+			if err != nil {
+				http.Error(w, "File not found", http.StatusNotFound)
+				return
+			}
+		} else {
+			http.Error(w, "File not found", http.StatusNotFound)
+			return
+		}
 	}
 	defer video.Close()
 
@@ -197,8 +224,6 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse the multipart form with a 10MB max memory limit
-	// 10 << 20 is a bitwise shift operation that equals 10 * 2^20 = 10,485,760 bytes (10MB)
-	// This sets the maximum amount of memory used to store file parts before they're written to disk
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
 		http.Error(w, "Failed to parse form", http.StatusBadRequest)
@@ -242,6 +267,59 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create transcoded versions
+	trans := transcoder.NewTranscoder(
+		filepath,
+		"videos",
+		[]string{"1080p", "720p", "480p", "360p"},
+	)
+
+	// Start transcoding in a goroutine
+	go func() {
+		if err := trans.Transcode(); err != nil {
+			log.Printf("Error transcoding video: %v", err)
+		}
+	}()
+
 	// Redirect back to the videos page
 	http.Redirect(w, r, "/videos", http.StatusSeeOther)
+}
+
+func VideoPlayerHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract the video filename from the URL
+	filename := strings.TrimPrefix(r.URL.Path, "/player/")
+	if filename == "" {
+		http.Error(w, "File not specified", http.StatusBadRequest)
+		return
+	}
+
+	// Create transcoder instance to get available qualities
+	trans := transcoder.NewTranscoder(
+		filepath.Join("videos", filename),
+		"videos",
+		[]string{"1080p", "720p", "480p", "360p"},
+	)
+
+	// Get available qualities
+	availableQualities := trans.GetAvailableQualities()
+
+	// Parse and execute the template
+	tmpl, err := template.ParseFiles("templates/video.html")
+	if err != nil {
+		http.Error(w, "Error loading template", http.StatusInternalServerError)
+		return
+	}
+
+	data := struct {
+		Filename           string
+		AvailableQualities []string
+	}{
+		Filename:           filename,
+		AvailableQualities: availableQualities,
+	}
+
+	if err := tmpl.Execute(w, data); err != nil {
+		http.Error(w, "Error rendering template", http.StatusInternalServerError)
+		return
+	}
 }

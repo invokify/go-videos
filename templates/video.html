@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player</title>
+    <style>
+        .video-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .video-player {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+        }
+
+        .quality-selector {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .quality-selector select {
+            padding: 5px;
+            margin-left: 10px;
+        }
+
+        .network-status {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e8e8e8;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .network-status.active {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="video-container">
+        <video id="videoPlayer" class="video-player" controls>
+            <source src="/stream/{{.Filename}}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+
+        <div class="quality-selector">
+            <label for="qualitySelect">Quality:</label>
+            <select id="qualitySelect">
+                <option value="original">Original</option>
+                {{range .AvailableQualities}}
+                <option value="{{.}}">{{.}}</option>
+                {{end}}
+            </select>
+        </div>
+
+        <div id="networkStatus" class="network-status">
+            <span id="networkStatusText"></span>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const video = document.getElementById('videoPlayer');
+            const qualitySelect = document.getElementById('qualitySelect');
+            const networkStatus = document.getElementById('networkStatus');
+            const networkStatusText = document.getElementById('networkStatusText');
+
+            let currentQuality = 'original';
+            let isAutoQuality = true;
+            let networkSpeed = 0;
+            let bufferingCount = 0;
+            const BUFFER_THRESHOLD = 3;
+            const SPEED_CHECK_INTERVAL = 5000; // 5 seconds
+
+            // Function to change video quality
+            function changeQuality(quality) {
+                const currentTime = video.currentTime;
+                const isPaused = video.paused;
+                const baseUrl = '/stream/{{.Filename}}';
+                const newSrc = quality === 'original' ? baseUrl : `${baseUrl}/${quality}`;
+
+                video.src = newSrc;
+                video.currentTime = currentTime;
+                if (!isPaused) {
+                    video.play();
+                }
+                currentQuality = quality;
+            }
+
+            // Function to check network speed
+            async function checkNetworkSpeed() {
+                try {
+                    const startTime = performance.now();
+                    const response = await fetch('/stream/{{.Filename}}/360p', {
+                        method: 'HEAD'
+                    });
+                    const endTime = performance.now();
+
+                    if (response.ok) {
+                        const contentLength = response.headers.get('content-length');
+                        const duration = (endTime - startTime) / 1000; // in seconds
+                        networkSpeed = (contentLength / duration) / 1024; // KB/s
+
+                        if (isAutoQuality) {
+                            adjustQualityBasedOnSpeed();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking network speed:', error);
+                }
+            }
+
+            // Function to adjust quality based on network speed
+            function adjustQualityBasedOnSpeed() {
+                let targetQuality = 'original';
+
+                if (networkSpeed < 1000) { // Less than 1 MB/s
+                    targetQuality = '360p';
+                } else if (networkSpeed < 2000) { // Less than 2 MB/s
+                    targetQuality = '480p';
+                } else if (networkSpeed < 4000) { // Less than 4 MB/s
+                    targetQuality = '720p';
+                } else {
+                    targetQuality = '1080p';
+                }
+
+                if (targetQuality !== currentQuality) {
+                    changeQuality(targetQuality);
+                    showNetworkStatus(`Auto-switched to ${targetQuality} due to network conditions`);
+                }
+            }
+
+            // Function to show network status
+            function showNetworkStatus(message) {
+                networkStatusText.textContent = message;
+                networkStatus.classList.add('active');
+                setTimeout(() => {
+                    networkStatus.classList.remove('active');
+                }, 3000);
+            }
+
+            // Event listener for quality selection
+            qualitySelect.addEventListener('change', function () {
+                isAutoQuality = this.value === 'auto';
+                if (!isAutoQuality) {
+                    changeQuality(this.value);
+                } else {
+                    adjustQualityBasedOnSpeed();
+                }
+            });
+
+            // Event listener for buffering
+            video.addEventListener('waiting', function () {
+                bufferingCount++;
+                if (bufferingCount >= BUFFER_THRESHOLD && isAutoQuality) {
+                    const currentIndex = Array.from(qualitySelect.options).findIndex(opt => opt.value === currentQuality);
+                    if (currentIndex > 0) {
+                        const lowerQuality = qualitySelect.options[currentIndex - 1].value;
+                        changeQuality(lowerQuality);
+                        showNetworkStatus(`Switched to ${lowerQuality} due to buffering`);
+                    }
+                    bufferingCount = 0;
+                }
+            });
+
+            video.addEventListener('playing', function () {
+                bufferingCount = 0;
+            });
+
+            // Start periodic network speed checks
+            setInterval(checkNetworkSpeed, SPEED_CHECK_INTERVAL);
+
+            // Initial network speed check
+            checkNetworkSpeed();
+        });
+    </script>
+</body>
+
+</html>
