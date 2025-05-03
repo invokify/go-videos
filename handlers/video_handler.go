@@ -10,9 +10,23 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
+// Global rate limiter for video streaming
+var streamLimiter = rate.NewLimiter(rate.Limit(10), 5) // 10 requests per second, burst of 5
+
+// Buffer size for video streaming (1MB)
+const streamBufferSize = 1 << 20
+
 func StreamHandler(w http.ResponseWriter, r *http.Request) {
+	// Apply rate limiting
+	if !streamLimiter.Allow() {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+
 	// Extract the video filename from the URL
 	filename := strings.TrimPrefix(r.URL.Path, "/stream/")
 	if filename == "" {
@@ -40,10 +54,24 @@ func StreamHandler(w http.ResponseWriter, r *http.Request) {
 	fileSize := fileInfo.Size()
 	lastModified := fileInfo.ModTime()
 
-	// Set cache control headers
+	// Determine content type based on file extension
+	contentType := "video/mp4" // default
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".webm":
+		contentType = "video/webm"
+	case ".ogg":
+		contentType = "video/ogg"
+	case ".mov":
+		contentType = "video/quicktime"
+	}
+
+	// Set headers
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=3600") // Cache for 1 hour
 	w.Header().Set("ETag", fmt.Sprintf(`"%x-%x"`, lastModified.Unix(), fileSize))
 	w.Header().Set("Last-Modified", lastModified.UTC().Format(http.TimeFormat))
+	w.Header().Set("Accept-Ranges", "bytes")
 
 	// Check if the client's cached version is still valid
 	if ifNoneMatch := r.Header.Get("If-None-Match"); ifNoneMatch != "" {
@@ -90,6 +118,12 @@ func StreamHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Validate range
+		if start < 0 || end >= fileSize || start > end {
+			http.Error(w, "Invalid range", http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+
 		// Seek to the start position
 		if _, err := video.Seek(start, 0); err != nil {
 			http.Error(w, "Failed to seek file", http.StatusInternalServerError)
@@ -98,24 +132,60 @@ func StreamHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Set headers for partial content
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
-		w.Header().Set("Accept-Ranges", "bytes")
 		w.Header().Set("Content-Length", strconv.FormatInt(end-start+1, 10))
 		w.WriteHeader(http.StatusPartialContent)
 
-		// Stream the video chunk
-		_, err = io.CopyN(w, video, end-start+1)
-		if err != nil {
-			log.Printf("Error streaming video: %v", err)
-			return
+		// Stream the video chunk with custom buffer
+		buffer := make([]byte, streamBufferSize)
+		remaining := end - start + 1
+		for remaining > 0 {
+			readSize := streamBufferSize
+			if remaining < int64(readSize) {
+				readSize = int(remaining)
+			}
+			n, err := video.Read(buffer[:readSize])
+			if err != nil && err != io.EOF {
+				log.Printf("Error streaming video: %v", err)
+				return
+			}
+			if n > 0 {
+				if _, err := w.Write(buffer[:n]); err != nil {
+					log.Printf("Error writing video chunk: %v", err)
+					return
+				}
+				remaining -= int64(n)
+			}
+			if err == io.EOF {
+				break
+			}
 		}
 	} else {
 		// Stream entire file if no range is specified
 		w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
-		w.Header().Set("Accept-Ranges", "bytes")
-		_, err = io.Copy(w, video)
-		if err != nil {
-			log.Printf("Error streaming video: %v", err)
-			return
+
+		// Stream with custom buffer
+		buffer := make([]byte, streamBufferSize)
+		remaining := fileSize
+		for remaining > 0 {
+			readSize := streamBufferSize
+			if remaining < int64(readSize) {
+				readSize = int(remaining)
+			}
+			n, err := video.Read(buffer[:readSize])
+			if err != nil && err != io.EOF {
+				log.Printf("Error streaming video: %v", err)
+				return
+			}
+			if n > 0 {
+				if _, err := w.Write(buffer[:n]); err != nil {
+					log.Printf("Error writing video chunk: %v", err)
+					return
+				}
+				remaining -= int64(n)
+			}
+			if err == io.EOF {
+				break
+			}
 		}
 	}
 }

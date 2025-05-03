@@ -9,6 +9,7 @@ A modern video gallery application built with Go, featuring a responsive grid la
 - Interactive play/pause controls
 - Video streaming with support for various video formats
 - Automatic video metadata extraction (duration, title)
+- Automatic thumbnail generation for video previews
 - Modern and clean user interface
 - HTTP caching support for improved video playback performance
 - Range request support for efficient video streaming
@@ -74,7 +75,10 @@ go-video/
 ├── templates/        # HTML templates
 │   ├── base.html
 │   └── videos.html
-└── videos/          # Video storage directory
+├── videos/          # Video storage directory
+├── thumbnails/      # Generated video thumbnails
+├── go.mod           # Go module definition
+└── go.sum           # Go module checksums
 ```
 
 ## Development
